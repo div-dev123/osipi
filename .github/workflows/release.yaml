@@ -147,6 +147,7 @@ jobs:
         with:
           tag_name: "v${{ needs.detect-target.outputs.version }}"
           name: "v${{ needs.detect-target.outputs.version }}"
+          target_commitish: main
           generate_release_notes: true
           files: dist/*
 
