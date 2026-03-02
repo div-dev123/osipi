@@ -22,9 +22,9 @@ on:
           - pypi
           - testpypi
 
-  push:
+  pull_request:
+    types: [closed]
     branches: [main]
-    paths: [osipy/_version.py]
 
 permissions:
   contents: write
@@ -32,7 +32,7 @@ permissions:
   id-token: write
 
 jobs:
-  # ── Stage 1: triggered by workflow_dispatch ──
+  # ── Stage 1: workflow_dispatch → run tests and create release PR ──
   tests:
     if: github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/pytest-actions.yaml
@@ -82,13 +82,16 @@ jobs:
 
           gh pr create \
             --title "release: v${version}" \
-            --body "Automated version bump to v${version}. Approve and merge to publish to **${{ inputs.target }}**." \
+            --body "Automated version bump to v${version}. Publish target: **${{ inputs.target }}**." \
             --base main \
             --head "$branch"
 
-  # ── Stage 2: triggered by push to main (PR merge) ──
+  # ── Stage 2: PR merged → tag, build, publish ──
   detect-target:
-    if: github.event_name == 'push'
+    if: >-
+      github.event_name == 'pull_request'
+      && github.event.pull_request.merged == true
+      && startsWith(github.event.pull_request.head.ref, 'release/')
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
@@ -106,14 +109,10 @@ jobs:
           ")
           echo "version=${version}" >> "$GITHUB_OUTPUT"
 
-      - name: Detect publish target from PR
+      - name: Detect publish target from PR body
         id: target
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
-          body=$(gh pr list --state merged --base main --limit 1 \
-            --search "release: v${{ steps.version.outputs.version }}" \
-            --json body -q '.[0].body // ""')
+          body="${{ github.event.pull_request.body }}"
           if echo "$body" | grep -q '**pypi**'; then
             echo "target=pypi" >> "$GITHUB_OUTPUT"
           else
