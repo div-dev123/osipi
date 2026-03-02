@@ -22,31 +22,31 @@ on:
           - pypi
           - testpypi
 
+  push:
+    branches: [main]
+    paths: [osipy/_version.py]
+
 permissions:
   contents: write
   pull-requests: write
   id-token: write
 
 jobs:
+  # ── Stage 1: triggered by workflow_dispatch ──
   tests:
+    if: github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/pytest-actions.yaml
 
-  release:
+  prepare-release:
+    if: github.event_name == 'workflow_dispatch'
     needs: tests
     runs-on: ubuntu-latest
-    environment:
-      name: ${{ inputs.target }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v5
 
       - name: Bump version
         id: version
@@ -66,7 +66,7 @@ jobs:
           sed -i "s/__version__ = \".*\"/__version__ = \"${new_version}\"/" osipy/_version.py
           echo "version=${new_version}" >> "$GITHUB_OUTPUT"
 
-      - name: Create release PR, approve, and merge
+      - name: Create release PR
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -82,38 +82,54 @@ jobs:
 
           gh pr create \
             --title "release: v${version}" \
-            --body "Automated version bump to v${version}" \
+            --body "Automated version bump to v${version}. Approve and merge to publish to **${{ inputs.target }}**." \
             --base main \
             --head "$branch"
 
-          gh pr review "$branch" --approve
-          gh pr merge "$branch" --auto --squash --delete-branch
+  # ── Stage 2: triggered by push to main (PR merge) ──
+  publish:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ steps.target.outputs.target }}
+    steps:
+      - uses: actions/checkout@v4
 
-      - name: Wait for PR to merge
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Get version
+        id: version
+        run: |
+          version=$(python -c "
+          import re, pathlib
+          text = pathlib.Path('osipy/_version.py').read_text()
+          print(re.search(r'__version__\s*=\s*\"(.+?)\"', text).group(1))
+          ")
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Detect publish target from PR
+        id: target
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          branch="release/v${{ steps.version.outputs.version }}"
-          echo "Waiting for status checks and auto-merge..."
-          while true; do
-            state=$(gh pr view "$branch" --json state -q '.state')
-            if [ "$state" = "MERGED" ]; then
-              echo "PR merged successfully"
-              break
-            elif [ "$state" = "CLOSED" ]; then
-              echo "PR was closed without merging"
-              exit 1
-            fi
-            sleep 30
-          done
+          body=$(gh pr list --state merged --base main --limit 1 \
+            --search "release: v${{ steps.version.outputs.version }}" \
+            --json body -q '.[0].body // ""')
+          if echo "$body" | grep -q '**pypi**'; then
+            echo "target=pypi" >> "$GITHUB_OUTPUT"
+          else
+            echo "target=testpypi" >> "$GITHUB_OUTPUT"
+          fi
 
-      - name: Tag merged main
+      - name: Create tag
         run: |
-          version="${{ steps.version.outputs.version }}"
-          git checkout main
-          git pull origin main
-          git tag "v${version}"
-          git push origin "v${version}"
+          git tag "v${{ steps.version.outputs.version }}"
+          git push origin "v${{ steps.version.outputs.version }}"
 
       - name: Build package
         run: uv build
@@ -127,11 +143,11 @@ jobs:
           files: dist/*
 
       - name: Publish to PyPI
-        if: inputs.target == 'pypi'
+        if: steps.target.outputs.target == 'pypi'
         uses: pypa/gh-action-pypi-publish@release/v1
 
       - name: Publish to TestPyPI
-        if: inputs.target == 'testpypi'
+        if: steps.target.outputs.target == 'testpypi'
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: https://test.pypi.org/legacy/
