@@ -537,7 +537,9 @@ class TestOSIPIReferenceData:
             "2cum",
         ],
     )
-    def test_osipi_dro_parameter_recovery(self, model_name, fitter_name, generate_figures):
+    def test_osipi_dro_parameter_recovery(
+        self, model_name, fitter_name, generate_figures
+    ):
         """Test parameter recovery against real OSIPI DRO data with noise.
 
         Uses externally-generated DRO CSV files from the OSIPI CodeCollection
@@ -715,9 +717,7 @@ class TestOSIPIReferenceData:
 
             from tests.compliance_figures import plot_osipi_dro_recovery
 
-            plot_osipi_dro_recovery(
-                tag, recovery_data, Path("output/compliance")
-            )
+            plot_osipi_dro_recovery(tag, recovery_data, Path("output/compliance"))
 
         assert n_fail == 0, (
             f"OSIPI DRO parameter recovery failed for {tag}: "
@@ -745,7 +745,9 @@ class TestOSIPIReferenceData:
             "2cum",
         ],
     )
-    def test_osipi_dro_delay_recovery(self, model_name, fitter_name, generate_figures, request):
+    def test_osipi_dro_delay_recovery(
+        self, model_name, fitter_name, generate_figures, request
+    ):
         """Test delay recovery against OSIPI DRO data with arterial delay.
 
         For Group B models (Patlak, 2CXM, 2CUM), uses separate delay=5s CSV

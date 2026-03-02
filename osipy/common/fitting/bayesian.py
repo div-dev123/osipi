@@ -268,18 +268,14 @@ class BayesianFitter(BaseFitter):
 
             # MAP cost: likelihood + prior (per-parameter weights)
             likelihood_cost = xp.sum(residuals**2, axis=0)
-            prior_cost = xp.sum(
-                prior_weights * (act_params - act_p0) ** 2, axis=0
-            )
+            prior_cost = xp.sum(prior_weights * (act_params - act_p0) ** 2, axis=0)
             cost = likelihood_cost + prior_cost
 
             # --- Convergence check ---
             has_prev = xp.isfinite(act_prev_cost)
             safe_prev = xp.where(has_prev, act_prev_cost, xp.ones_like(cost))
             safe_cost = xp.where(has_prev, cost, xp.zeros_like(cost))
-            cost_change = xp.abs(safe_prev - safe_cost) / (
-                xp.abs(safe_prev) + 1e-10
-            )
+            cost_change = xp.abs(safe_prev - safe_cost) / (xp.abs(safe_prev) + 1e-10)
             newly_converged = cost_change < self.tolerance
 
             still_active = xp.nonzero(~newly_converged)[0]
@@ -309,9 +305,7 @@ class BayesianFitter(BaseFitter):
             # --- Jacobian (active voxels only) ---
             jacobian = model.compute_jacobian_batch(act_params, pred, xp)
             if jacobian is None:
-                jacobian = lm._compute_jacobian_numerical(
-                    model, act_params, pred, xp
-                )
+                jacobian = lm._compute_jacobian_numerical(model, act_params, pred, xp)
 
             # J^T @ residuals with prior gradient
             jtr = xp.einsum("ptn,tn->pn", jacobian, residuals)
@@ -319,9 +313,7 @@ class BayesianFitter(BaseFitter):
 
             # J^T @ J with prior Hessian contribution + LM damping
             jtj = xp.einsum("ptn,qtn->pqn", jacobian, jacobian)
-            jtj[diag_idx, diag_idx, :] += prior_weights[:, 0].reshape(
-                n_params, 1
-            )
+            jtj[diag_idx, diag_idx, :] += prior_weights[:, 0].reshape(n_params, 1)
             jtj[diag_idx, diag_idx, :] += act_lambda * (
                 jtj[diag_idx, diag_idx, :] + 1e-10
             )
@@ -331,25 +323,19 @@ class BayesianFitter(BaseFitter):
             delta_params = lm._batch_solve(jtj, jtr, no_conv, xp)
 
             # Vectorized bound clipping
-            new_params = xp.clip(
-                act_params + delta_params, lower_bounds, upper_bounds
-            )
+            new_params = xp.clip(act_params + delta_params, lower_bounds, upper_bounds)
 
             # Trial-point cost
             pred_new = model.predict_array_batch(new_params, xp)
             new_likelihood = xp.sum((act_obs - pred_new) ** 2, axis=0)
-            new_prior = xp.sum(
-                prior_weights * (new_params - act_p0) ** 2, axis=0
-            )
+            new_prior = xp.sum(prior_weights * (new_params - act_p0) ** 2, axis=0)
             new_cost = new_likelihood + new_prior
 
             # Accept/reject per voxel
             improved = new_cost < cost
             act_params = xp.where(improved, new_params, act_params)
             act_prev_cost = xp.where(improved, cost, act_prev_cost)
-            act_lambda = xp.where(
-                improved, act_lambda * 0.5, act_lambda * 2.0
-            )
+            act_lambda = xp.where(improved, act_lambda * 0.5, act_lambda * 2.0)
             act_lambda = xp.clip(act_lambda, 1e-10, 1e10)
 
         # Write back any remaining active (unconverged) voxels

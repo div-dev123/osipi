@@ -403,9 +403,7 @@ class TestDCEFittingConfig:
 
     def test_dce_yaml_with_fitting_section(self) -> None:
         """DCE YAML with explicit fitting section loads correctly."""
-        cfg = DCEPipelineYAML(
-            fitting={"fitter": "lm", "max_iterations": 200}
-        )
+        cfg = DCEPipelineYAML(fitting={"fitter": "lm", "max_iterations": 200})
         assert cfg.fitting.fitter == "lm"
         assert cfg.fitting.max_iterations == 200
         assert cfg.fitting.tolerance == 1e-6  # default preserved
