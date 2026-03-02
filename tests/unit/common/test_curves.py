@@ -5,6 +5,8 @@ Tests for osipy/common/visualization/curves.py.
 
 from __future__ import annotations
 
+import matplotlib
+matplotlib.use("Agg")
 import numpy as np
 import pytest
 
